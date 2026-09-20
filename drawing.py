@@ -132,7 +132,7 @@ def render_canvas():
     stroke_width = 2 * st.session_state[state.BRUSH_SIZE_PX]
 
     return st_canvas(
-        fill_color="rgba(0, 0, 0, 1.0)",
+        fill_color="rgba(0, 0, 0, 0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
         background_image=background,
@@ -160,11 +160,35 @@ def apply_paint_from_canvas(canvas_result):
     it here (exactly like the "nothing to apply yet" cases above) avoids the
     crash and its knock-on effect of desyncing other widgets' displayed
     values by forcing an unplanned extra rerun.
+
+    The FIRST correctly-shaped snapshot of a session is *also* discarded,
+    not folded in -- see CANVAS_WARMED_UP. This is a defensive measure for a
+    bug that only shows up on Streamlit Community Cloud, not locally (see
+    _patch_image_to_url_compat's own docstring for the general background-
+    loading race this component already has, and which this addresses a
+    variant of): the background image can apparently still be mid-load when
+    the browser reports back this first snapshot, so what comes back isn't
+    the intended all-(-1000 HU) phantom but whatever the page's own theme
+    background looked like underneath -- and unlike the shape-mismatch case,
+    this snapshot has the *right* shape, so nothing before this would have
+    caught it. Folding it in would silently overwrite the correctly
+    initialized blank_image_hu() with that wrong color, which then has to be
+    manually re-painted over. Since a real user stroke can't physically
+    happen before the canvas has rendered at least once, discarding
+    specifically the first snapshot -- and only that one -- never discards
+    real input; at worst, if the canvas is still mid-load *and* the user's
+    first stroke both land in the same rerun, the very start of that one
+    stroke is dropped (the rest of it, and everything after, is folded in
+    normally, since `realtime_update=True` reports a stroke-in-progress
+    across several reruns, not just one at the end).
     """
     if canvas_result is None or canvas_result.image_data is None:
         return
     expected_shape = (config.IMAGE_SIZE_PX, config.IMAGE_SIZE_PX)
     if canvas_result.image_data.shape[:2] != expected_shape:
+        return
+    if not st.session_state[state.CANVAS_WARMED_UP]:
+        st.session_state[state.CANVAS_WARMED_UP] = True
         return
     gray = canvas_result.image_data[:, :, :3].mean(axis=2)
     hu = gray_u8_to_hu(gray)

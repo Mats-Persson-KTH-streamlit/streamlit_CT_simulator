@@ -16,6 +16,7 @@ BRUSH_HU = "brush_hu"
 BRUSH_SIZE_PX = "brush_size_px"
 THETA_DEG = "theta_deg"
 SINOGRAM = "sinogram"  # None until the first completed scan
+CANVAS_WARMED_UP = "canvas_warmed_up"  # see drawing.apply_paint_from_canvas
 
 
 def init_state():
@@ -30,3 +31,5 @@ def init_state():
         st.session_state[THETA_DEG] = 0.0
     if SINOGRAM not in st.session_state:
         st.session_state[SINOGRAM] = None
+    if CANVAS_WARMED_UP not in st.session_state:
+        st.session_state[CANVAS_WARMED_UP] = False
