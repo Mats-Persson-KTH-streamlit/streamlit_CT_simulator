@@ -132,7 +132,7 @@ def render_canvas():
     stroke_width = 2 * st.session_state[state.BRUSH_SIZE_PX]
 
     return st_canvas(
-        fill_color="rgba(0, 0, 0, 0)",
+        fill_color="rgba(0, 0, 0, 1.0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
         background_image=background,
