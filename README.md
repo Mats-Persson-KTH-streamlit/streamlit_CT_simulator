@@ -1,4 +1,5 @@
 # Parallel-Beam CT Simulator
+By Mats Persson together with Claude code
 
 An interactive teaching tool for x-ray computed tomography: draw a grayscale
 phantom, manually rotate a virtual detector with an angle slider to see its
