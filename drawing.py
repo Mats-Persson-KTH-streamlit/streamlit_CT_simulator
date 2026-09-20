@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
 import streamlit.elements.image as _st_image_module
-from PIL import Image
 
 import config
 import ct_model
@@ -67,11 +66,6 @@ _BRUSH_LABELS = {
 CANVAS_KEY = "phantom_canvas"
 
 
-def hu_to_gray_u8(hu_array):
-    frac = (hu_array - config.HU_MIN) / (config.HU_MAX - config.HU_MIN)
-    return np.clip(frac * 255, 0, 255).astype(np.uint8)
-
-
 def gray_u8_to_hu(gray_array):
     frac = gray_array.astype(np.float64) / 255.0
     return config.HU_MIN + frac * (config.HU_MAX - config.HU_MIN)
@@ -80,12 +74,6 @@ def gray_u8_to_hu(gray_array):
 def hu_to_gray_hex(hu_value):
     g = int(np.clip((hu_value - config.HU_MIN) / (config.HU_MAX - config.HU_MIN) * 255, 0, 255))
     return f"#{g:02x}{g:02x}{g:02x}"
-
-
-def image_hu_to_pil(image_hu):
-    """Phantom rendered at 1:1 scale as the canvas background."""
-    gray = hu_to_gray_u8(image_hu)
-    return Image.fromarray(gray, mode="L").convert("RGB")
 
 
 def render_brush_panel():
@@ -126,8 +114,54 @@ def render_hu_slider_and_colorbar():
 
 
 def render_canvas():
-    """Renders the paint surface and returns the raw CanvasResult."""
-    background = image_hu_to_pil(st.session_state[state.IMAGE_HU])
+    """Renders the paint surface and returns the raw CanvasResult.
+
+    Always uses a fixed background_color="black", and NEVER background_image
+    -- deliberately, after two rounds of trying to use background_image at
+    all:
+
+    1. Passing background_image=image_hu_to_pil(image_hu) unconditionally
+       (the original design): works locally, but on Streamlit Community
+       Cloud the image has been observed to simply never load (the drawing
+       area shows the page's own light/dark theme color instead, and it
+       never self-corrects, even after drawing) while everything else on
+       the page -- including the gantry-sketch panel, which renders the
+       exact same image_hu through Streamlit's own st.pyplot()/st.image()
+       path rather than this component's -- displays correctly. That
+       pointed at streamlit-drawable-canvas's own background-loading path
+       specifically (it's unmaintained since 2023 and already has one
+       documented history of origin/URL-construction bugs in this exact
+       path -- see _patch_image_to_url_compat above), not at image_hu or
+       the constraint pipeline -- confirmed directly, since a screenshot of
+       the broken deployment still showed the correct phantom, stroke
+       included, in the gantry sketch.
+
+    2. Switching to background_color="black" only while the phantom was
+       still perfectly uniform, falling back to background_image once
+       anything was drawn (reasoning: a uniform image has no visual
+       information a flat color can't already represent exactly, so the
+       common "fresh session" case could skip the fragile path entirely).
+       This introduced a WORSE bug: st_canvas's own (installed, third-party,
+       unmodifiable) wrapper code -- site-packages/streamlit_drawable_canvas/
+       __init__.py -- forces background_color to "" whenever background_image
+       is passed at all, and its docstring explicitly warns "Changing
+       background_color will reset the drawing." Switching between the two
+       modes therefore toggles background_color's actual value the moment
+       the phantom stopped being blank (i.e. on the user's very first
+       stroke), silently wiping image_hu back to blank right as it was
+       drawn on.
+
+    Given background_image is the one proven unreliable on some
+    deployments, and toggling between the two is proven to corrupt data,
+    the only combination that's actually stable is to never use
+    background_image and never change background_color's value at all --
+    accepting the one real trade-off this leaves: the canvas no longer
+    visually restores a previously-drawn phantom after a genuine page
+    reload (image_hu and the gantry-sketch panel are unaffected either way,
+    since they don't depend on this at all -- only the canvas's own on-screen
+    appearance immediately after a reload would show blank until the next
+    stroke).
+    """
     stroke_color = hu_to_gray_hex(st.session_state[state.BRUSH_HU])
     stroke_width = 2 * st.session_state[state.BRUSH_SIZE_PX]
 
@@ -135,7 +169,7 @@ def render_canvas():
         fill_color="rgba(0, 0, 0, 0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
-        background_image=background,
+        background_color="black",
         update_streamlit=True,
         height=config.CANVAS_SIZE_PX,
         width=config.CANVAS_SIZE_PX,
