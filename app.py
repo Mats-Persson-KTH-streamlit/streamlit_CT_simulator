@@ -178,6 +178,7 @@ with col_left:
         "Pick a CT number and brush size, then draw inside the circle. "
         "Use the angle slider to rotate the detector manually. "
         "Click Scan to acquire the full sinogram."
+        "Note: if the full drawing area is not visible, use your browser's zoom function (hold down Ctrl or Command and press -) to zoom out until you see the full drawing area (it should be square-shaped)."
     )
     scan_clicked = st.button("Scan", type="primary")
 
